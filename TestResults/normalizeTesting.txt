@@ -1,0 +1,47 @@
+Test 1:
+Original: This is how it,
+read the
+text sometimes
+Normalized: This is how it, read the text sometimes
+Expected: This is how it, read the text sometimes
+Pass
+------------------------------------------
+
+
+Test 2:
+Original: This is how it
+works out sometimes
+Normalized: This is how it works out sometimes
+Expected: This is how it works out sometimes
+Pass
+------------------------------------------
+
+
+Test 3:
+Original: Hello there,
+this is a test
+Normalized: Hello there, this is a test
+Expected: Hello there, this is a test
+Pass
+------------------------------------------
+
+
+Test 4:
+Original: Multiple
+
+
+newlines
+
+are here
+Normalized: Multiple newlines are here
+Expected: Multiple newlines are here
+Pass
+------------------------------------------
+
+
+Test 5:
+Original: Nothing to change.
+Normalized: Nothing to change.
+Expected: Nothing to change.
+Pass
+------------------------------------------

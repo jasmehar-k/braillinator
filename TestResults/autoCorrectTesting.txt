@@ -1,0 +1,53 @@
+Test 1:
+Input: Today she ran to the stoore.
+Correctness: Expected True and actually 1
+        -->True
+AUTOCORRECT:
+Expected: Today she ran to the store.
+Actual:   Today she ran to the store.
+        -->True
+------------------------------------------
+
+
+Test 2:
+Input: Today she ran to the stoore.
+Correctness: Expected True and actually 1
+        -->True
+AUTOCORRECT:
+Expected: Today she ran to the store.
+Actual:   Today she ran to the store.
+        -->True
+------------------------------------------
+
+
+Test 3:
+Input: Today alice ran to the stoore. alice bought aples and banannas. alice relly likes fuits.
+Correctness: Expected False and actually 0
+        -->True
+AUTOCORRECT:
+Expected: Today alice ran to the store. alice bought apples and bananas. alice really likes .uits.
+Actual:   Today alice ran to the store. alice bought apples and bananas. alice really likes suits.
+        -->True
+------------------------------------------
+
+
+Test 4:
+Input: Today Alice ran to the store.
+Correctness: Expected True and actually 1
+        -->True
+AUTOCORRECT:
+Expected: Today .* ran to the store.
+Actual:   Today alive ran to the store.
+        -->True
+------------------------------------------
+
+
+Test 5:
+Input: The quik bwn fox jumpped ovr the lazzy dog.
+Correctness: Expected False and actually 0
+        -->True
+AUTOCORRECT:
+Expected: The .* fox .* the .* dog.
+Actual:   The quit own fox jumped or the lazy dog.
+        -->True
+------------------------------------------

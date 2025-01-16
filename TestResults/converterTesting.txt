@@ -1,0 +1,27 @@
+Testing visual_braille_convert
+Test 1: Passed   Input: hello Output: ⠓⠑⠇⠇⠕
+Test 2: Passed   Input: braille Output: ⠃⠗⠁⠊⠇⠇⠑
+Test 3: Passed   Input: world Output: ⠺⠕⠗⠇⠙
+Test 4: Passed   Input: upper Output: ⠥⠏⠏⠑⠗
+Test 5: Passed   Input: space test Output: ⠎⠏⠁⠉⠑ ⠞⠑⠎⠞
+Test 6: Passed   Input: hello, world! Output: ⠓⠑⠇⠇⠕⠂ ⠺⠕⠗⠇⠙⠖
+Test 7: Passed   Input: Hello Output: ⠠⠓⠑⠇⠇⠕
+Test 8: Passed   Input: @@@ Output: ⠿⠿⠿
+
+Testing braille_to_text
+Test 1: Passed   Input: ⠓⠑⠇⠇⠕ Output: hello
+Test 2: Passed   Input: ⠃⠗⠁⠊⠇⠇⠑ Output: braille
+Test 3: Passed   Input: ⠺⠕⠗⠇⠙ Output: world
+Test 4: Passed   Input: ⠥⠏⠏⠑⠗ Output: upper
+Test 5: Passed   Input: ⠎⠏⠁⠉⠑ ⠞⠑⠎⠞ Output: space test
+Test 6: Passed   Input: ⠓⠑⠇⠇⠕⠂ ⠺⠕⠗⠇⠙⠖ Output: hello, world!
+Test 7: Passed   Input: ⠠⠓⠑⠇⠇⠕ Output: Hello
+Test 8: Passed   Input: ⠠⠥⠏⠏⠑⠗ Output: Upper
+
+Testing braille_to_binary_array
+Test 1: Passed   Input: [1, 2] Output: [1, 1, 0, 0, 0, 0, 0, 0]
+Test 2: Passed   Input: [1, 3, 4] Output: [1, 0, 1, 1, 0, 0, 0, 0]
+Test 3: Passed   Input: [1, 4, -1] Output: [1, 0, 0, 1, 0, 0, 1, 0]
+Test 4: Passed   Input: [2, 5, 6] Output: [0, 1, 0, 0, 1, 1, 0, 0]
+Test 5: Passed   Input: [1, 2, 3, 4] Output: [1, 1, 1, 1, 0, 0, 0, 0]
+Test 6: Passed   Input: [-2, 3, 5] Output: [0, 0, 1, 0, 1, 0, 0, 1]
