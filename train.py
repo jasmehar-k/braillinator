@@ -135,7 +135,7 @@ def run_epoch(model, loader, optimizer, loss_fn, device, train: bool) -> float:
             clean = clean.to(device)
 
             pred = model(degraded, tokens)
-            loss = loss_fn(pred, clean) + 0.1 * gradient_loss(pred, clean)
+            loss = loss_fn(pred, clean)
 
             if train:
                 optimizer.zero_grad()
