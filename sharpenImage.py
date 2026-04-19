@@ -43,6 +43,29 @@ def preprocessing(imagePath):
 
     return rotatedImage
 
+
+def preprocess_array(img: np.ndarray) -> np.ndarray:
+    """Same pipeline as preprocessing() but accepts an already-loaded grayscale numpy array."""
+    pil = Image.fromarray(img)
+    pil = pil.point(lambda p: 255 if p > 128 else 0)
+    cvData = np.array(pil)
+    cvData = cv2.medianBlur(cvData, 3)
+
+    coords = np.column_stack(np.where(cvData > 0))
+    angle = cv2.minAreaRect(coords)[-1]
+    if angle < -45:
+        angle = -(90 + angle)
+    elif angle > 45:
+        angle = 90 - angle
+    else:
+        angle = -angle
+
+    (h, w) = cvData.shape[:2]
+    center = (w // 2, h // 2)
+    matrix = cv2.getRotationMatrix2D(center, angle, 1.0)
+    return cv2.warpAffine(cvData, matrix, (w, h), flags=cv2.INTER_CUBIC, borderMode=cv2.BORDER_REPLICATE)
+
+
 # Test Code
 # RESULT OF TESTING ARE IN: TestResults\sharpenImageTesting.md
 """ 
