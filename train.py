@@ -175,18 +175,24 @@ def train(dataset_dir: str = "dataset", num_epochs: int = NUM_EPOCHS) -> None:
     model = ConditionalUNet().to(device)
     optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
     loss_fn = CombinedLoss().to(device)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs, eta_min=1e-6)
 
     best_val = float("inf")
     start_epoch = 0
 
     if os.path.exists(BEST_CHECKPOINT):
         start_epoch, best_val = load_checkpoint(model, optimizer, BEST_CHECKPOINT)
+        # Advance scheduler to match resumed epoch so LR is correct
+        for _ in range(start_epoch):
+            scheduler.step()
         print(f"Resumed from epoch {start_epoch}, best val loss {best_val:.4f}")
 
     for epoch in range(start_epoch, num_epochs):
         train_loss = run_epoch(model, train_loader, optimizer, loss_fn, device, train=True)
         val_loss = run_epoch(model, val_loader, optimizer, loss_fn, device, train=False)
-        print(f"Epoch {epoch+1}/{num_epochs}  train={train_loss:.4f}  val={val_loss:.4f}")
+        scheduler.step()
+        current_lr = scheduler.get_last_lr()[0]
+        print(f"Epoch {epoch+1}/{num_epochs}  train={train_loss:.4f}  val={val_loss:.4f}  lr={current_lr:.2e}")
 
         if val_loss < best_val:
             best_val = val_loss
