@@ -98,10 +98,15 @@ class ConditionalUNet(nn.Module):
         self.dec1 = DecoderBlock(32, 32, 16)
 
         self.output_conv = nn.Conv2d(16, 1, 1)
-        self.output_act = nn.Sigmoid()
+        # Tanh for residual learning: model predicts a signed correction to add
+        # to the input rather than the absolute output.  This means clean inputs
+        # naturally receive a near-zero residual (no change), while degraded inputs
+        # receive targeted corrections — avoiding the hallucination problem where
+        # the model distorts already-clean images.
+        self.output_act = nn.Tanh()
 
     def forward(self, x: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
-        # x: (B, 1, 256, 256)   tokens: (B, MAX_LEN)
+        # x: (B, 1, 256, 256) in [0, 1]   tokens: (B, MAX_LEN)
         emb = self.embedding(tokens)                          # (B, MAX_LEN, EMBED_DIM)
         text_vec = F.relu(self.embed_pool(emb.mean(dim=1)))  # (B, BOTTLENECK_CH)
 
@@ -118,4 +123,5 @@ class ConditionalUNet(nn.Module):
         d = self.dec2(d, s2)   # (B, 32, 128, 128)
         d = self.dec1(d, s1)   # (B, 16, 256, 256)
 
-        return self.output_act(self.output_conv(d))  # (B, 1, 256, 256)
+        residual = self.output_act(self.output_conv(d))  # (B, 1, 256, 256) in [-1, 1]
+        return torch.clamp(x + 0.3 * residual, 0.0, 1.0)
