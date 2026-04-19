@@ -124,4 +124,4 @@ class ConditionalUNet(nn.Module):
         d = self.dec1(d, s1)   # (B, 16, 256, 256)
 
         residual = self.output_act(self.output_conv(d))  # (B, 1, 256, 256) in [-1, 1]
-        return torch.clamp(x + 0.3 * residual, 0.0, 1.0)
+        return torch.clamp(x + 0.5 * residual, 0.0, 1.0)
