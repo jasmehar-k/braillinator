@@ -17,9 +17,6 @@ BATCH_SIZE = 8
 LEARNING_RATE = 1e-4
 NUM_EPOCHS = 50
 IMAGE_SIZE = 256
-# Soft target smoothing: avoids model over-committing on hard binary targets
-TARGET_MIN = 0.05
-TARGET_MAX = 0.95
 
 
 class OCRDataset(Dataset):
@@ -53,10 +50,7 @@ class OCRDataset(Dataset):
                 ocr_text = f.read()
 
         degraded_t = torch.from_numpy(degraded.astype(np.float32) / 255.0).unsqueeze(0)
-        # Apply soft target smoothing to clean image
-        clean_f = clean.astype(np.float32) / 255.0
-        clean_f = clean_f * (TARGET_MAX - TARGET_MIN) + TARGET_MIN
-        clean_t = torch.from_numpy(clean_f).unsqueeze(0)
+        clean_t = torch.from_numpy(clean.astype(np.float32) / 255.0).unsqueeze(0)
 
         tokens = self.tokenizer.encode(ocr_text)
         return degraded_t, tokens, clean_t
@@ -69,11 +63,31 @@ class MultiScaleL1Loss(nn.Module):
 
     def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         loss = F.l1_loss(pred, target) * self.weights[0]
+        p, t = pred, target
         for w in self.weights[1:]:
-            pred = F.interpolate(pred, scale_factor=0.5, mode="bilinear", align_corners=False)
-            target = F.interpolate(target, scale_factor=0.5, mode="bilinear", align_corners=False)
-            loss = loss + F.l1_loss(pred, target) * w
+            p = F.interpolate(p, scale_factor=0.5, mode="bilinear", align_corners=False)
+            t = F.interpolate(t, scale_factor=0.5, mode="bilinear", align_corners=False)
+            loss = loss + F.l1_loss(p, t) * w
         return loss
+
+
+class CombinedLoss(nn.Module):
+    """
+    Multi-scale L1 + gradient loss for raw grayscale image restoration.
+
+    The model uses residual learning so the training target is the clean raw
+    grayscale image (not a binary image), making BCE inappropriate.
+    Multi-scale L1 captures coarse structure at multiple resolutions;
+    gradient loss penalises blurry edges in text strokes.
+    """
+    def __init__(self):
+        super().__init__()
+        self.ms_l1 = MultiScaleL1Loss()
+
+    def forward(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        l1   = self.ms_l1(pred, target)
+        grad = gradient_loss(pred, target)
+        return l1 + 0.2 * grad
 
 
 def gradient_loss(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
@@ -160,7 +174,7 @@ def train(dataset_dir: str = "dataset", num_epochs: int = NUM_EPOCHS) -> None:
 
     model = ConditionalUNet().to(device)
     optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
-    loss_fn = MultiScaleL1Loss().to(device)
+    loss_fn = CombinedLoss().to(device)
 
     best_val = float("inf")
     start_epoch = 0
