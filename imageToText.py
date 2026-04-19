@@ -5,6 +5,7 @@
 import pytesseract
 import sharpenImage
 import autoCorrect
+import enhance
 from normalize import normalize_newlines
 
 # Take image address and tolerance for accuracy and convert to text
@@ -12,11 +13,19 @@ def handleImage(address, fractionTolerance):
     pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
     
     image = sharpenImage.preprocessing(address)
+
+    # First OCR pass — used as conditioning signal for the U-Net
+    initial_text = pytesseract.image_to_string(image, lang='eng') or ""
+
+    # U-Net restoration: no-op if checkpoints/best.pt does not exist
+    image = enhance.enhance_image(image, initial_text)
+
+    # Second OCR pass on the restored image
     text = pytesseract.image_to_string(image, lang='eng')
 
     if text is None: # This will lead to output error code
         print("No text found")
-        return ("-1") 
+        return ("-1")
     
     # print("You have gotten the text and checked if it none")
     text = normalize_newlines(text)
