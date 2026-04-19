@@ -6,7 +6,7 @@ import random
 import cv2
 import numpy as np
 import pytesseract
-from PIL import Image
+from PIL import Image, ImageOps
 
 import sharpenImage
 
@@ -65,6 +65,22 @@ def degrade_image(img: np.ndarray) -> np.ndarray:
     return img
 
 
+def extract_patch(img: np.ndarray, size: int = 256) -> np.ndarray:
+    """Extract a random size×size patch. Upscales the image if it's smaller."""
+    h, w = img.shape[:2]
+    if h < size:
+        scale = size / h
+        img = cv2.resize(img, (max(size, int(w * scale)), size), interpolation=cv2.INTER_LINEAR)
+        h, w = img.shape[:2]
+    if w < size:
+        scale = size / w
+        img = cv2.resize(img, (size, max(size, int(h * scale))), interpolation=cv2.INTER_LINEAR)
+        h, w = img.shape[:2]
+    y = random.randint(0, h - size)
+    x = random.randint(0, w - size)
+    return img[y : y + size, x : x + size].copy()
+
+
 def get_ocr_text(img: np.ndarray) -> str:
     try:
         text = pytesseract.image_to_string(img, lang="eng")
@@ -108,7 +124,16 @@ def generate_dataset(
         for fname in files:
             path = os.path.join(clean_images_dir, fname)
             try:
-                clean = sharpenImage.preprocessing(path)
+                # Load raw grayscale (EXIF-corrected) — this is the training TARGET.
+                # The U-Net operates in raw-image space, not binary space, so the
+                # model learns to restore soft grayscale photos that Tesseract can
+                # read well, rather than trying to reconstruct hard binary images.
+                pil = Image.open(path)
+                try:
+                    pil = ImageOps.exif_transpose(pil)
+                except Exception:
+                    pass
+                clean = np.array(pil.convert("L"))
             except Exception as e:
                 print(f"  Skipping {fname}: {e}")
                 continue
@@ -120,14 +145,28 @@ def generate_dataset(
                 random.seed(pair_idx)
                 np.random.seed(pair_idx)
 
-                degraded = degrade_image(clean.copy())
-                ocr_text = get_ocr_text(degraded)
+                # Extract a 256×256 patch so text is at readable resolution.
+                # Training on full-image downscales makes text only ~4px tall,
+                # which is too small for the model to learn meaningful texture.
+                clean_patch = extract_patch(clean)
+                degraded_patch = degrade_image(clean_patch.copy())
+
+                # OCR conditioning: run on the full preprocessed image (not the patch).
+                # A 256×256 patch is too small for reliable OCR; the full image gives
+                # the correct text hint that imageToText.py would provide at inference.
+                try:
+                    preprocessed_for_ocr = sharpenImage.preprocess_array(
+                        degrade_image(clean.copy())
+                    )
+                    ocr_text = get_ocr_text(preprocessed_for_ocr)
+                except Exception:
+                    ocr_text = ""
 
                 pair_dir = os.path.join(output_dir, "pairs", f"{pair_idx:05d}")
                 os.makedirs(pair_dir, exist_ok=True)
 
-                cv2.imwrite(os.path.join(pair_dir, "degraded.png"), degraded)
-                cv2.imwrite(os.path.join(pair_dir, "clean.png"), clean)
+                cv2.imwrite(os.path.join(pair_dir, "degraded.png"), degraded_patch)
+                cv2.imwrite(os.path.join(pair_dir, "clean.png"), clean_patch)
                 with open(os.path.join(pair_dir, "ocr.txt"), "w", encoding="utf-8") as f:
                     f.write(ocr_text)
 
