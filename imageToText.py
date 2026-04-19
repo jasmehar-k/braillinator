@@ -2,32 +2,50 @@
 # October 28, 2024 - Iya - Created Example
 # November 11, November - Iya - Optimize flow
 
+import platform
+import numpy as np
 import pytesseract
+from PIL import Image, ImageOps
 import sharpenImage
 import autoCorrect
 import enhance
 from normalize import normalize_newlines
 
+if platform.system() == "Windows":
+    pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+
 # Take image address and tolerance for accuracy and convert to text
 def handleImage(address, fractionTolerance):
-    pytesseract.pytesseract.tesseract_cmd = r'C:\\Program Files\\Tesseract-OCR\\tesseract.exe'
-    
-    image = sharpenImage.preprocessing(address)
+    # Standard preprocessing + first OCR pass
+    preprocessed = sharpenImage.preprocessing(address)
+    initial_text = pytesseract.image_to_string(preprocessed, lang='eng') or ""
 
-    # First OCR pass — used as conditioning signal for the U-Net
-    initial_text = pytesseract.image_to_string(image, lang='eng') or ""
+    # Quality gate: only run the U-Net when the initial OCR result is poor.
+    # Requires at least 10 words so the misspelling rate is meaningful — very
+    # short OCR results (nearly blank images) should not trigger enhancement.
+    enough_words = len(initial_text.split()) >= 10
+    if enough_words and not autoCorrect.misspelledCount(initial_text, fractionTolerance):
+        # Initial OCR failed the quality check — attempt U-Net enhancement.
+        # Load raw grayscale so the model can restore soft photo detail before
+        # binarization, where blurry images lose the most information.
+        pil = Image.open(address)
+        try:
+            pil = ImageOps.exif_transpose(pil)
+        except Exception:
+            pass
+        raw = np.array(pil.convert("L"))
+        enhanced_raw = enhance.enhance_image(raw, initial_text)
+        image = sharpenImage.preprocess_array(enhanced_raw)
+    else:
+        # Initial OCR is already good enough — skip enhancement.
+        image = preprocessed
 
-    # U-Net restoration: no-op if checkpoints/best.pt does not exist
-    image = enhance.enhance_image(image, initial_text)
-
-    # Second OCR pass on the restored image
     text = pytesseract.image_to_string(image, lang='eng')
 
     if text is None: # This will lead to output error code
         print("No text found")
         return ("-1")
-    
-    # print("You have gotten the text and checked if it none")
+
     text = normalize_newlines(text)
     text = autoCorrect.autoCorrect(text)
 
