@@ -73,9 +73,14 @@ The real problem wasn't just the data — it was that the architecture was using
 
 3. **No spatial grounding**: the model knew "this image contains some text" but had no idea *where* in the image the OCR was struggling.
 
-Current fix being trained now:
+Two architecture fixes were made:
 - **Spatial confidence map as a second input channel**: Tesseract's `image_to_data()` returns per-word confidence scores. We render these as a heatmap and feed it alongside the image — the model now sees exactly which regions OCR is uncertain about.
 - **Multi-level FiLM**: text conditioning applied at every decoder stage (32×32, 64×64, 128×128) not just the bottleneck, so the semantic signal stays present all the way to full resolution.
+
+### Round 4 results — mixed
+Val loss actually went up slightly (0.1217 → 0.1326) and average improvement was about the same (-3.1% vs -3.6%). TestImage_1 got a bit better (-54.7% miss rate vs -52.1%) but TestImage_4 regressed. The architecture changes are the right direction but they're not making a real difference yet — the training data is still the bottleneck. The model can't learn to use the confidence map properly when it's trained on synthetic degradation that doesn't match real camera photos.
+
+Next up: instead of needing (degraded image, clean image) pairs, try using OCR ground-truth datasets where we have (real image, correct text). This lets us train with a text-recognition loss directly, which is what we actually care about.
 
 ---
 
