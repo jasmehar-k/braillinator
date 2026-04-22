@@ -74,3 +74,14 @@ yarn-error.*
 
 # typescript
 *.tsbuildinfo
+
+CLAUDE.md
+.claude/
+
+# Data
+dataset/
+dataset_mixed/
+kaggle*/
+mixed_images/
+run_dataset/pairs
+synthetic_images/
