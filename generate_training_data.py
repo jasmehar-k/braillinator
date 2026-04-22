@@ -89,6 +89,24 @@ def get_ocr_text(img: np.ndarray) -> str:
         return ""
 
 
+def generate_confidence_map(img: np.ndarray) -> np.ndarray:
+    """Return float32 heatmap in [0,1]: 1=OCR confident, 0=uncertain/no word."""
+    conf_map = np.zeros(img.shape[:2], dtype=np.float32)
+    try:
+        data = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
+        for i, conf in enumerate(data["conf"]):
+            if conf == -1:  # block/para/line level rows, not words
+                continue
+            x, y, w, h = data["left"][i], data["top"][i], data["width"][i], data["height"][i]
+            if w > 0 and h > 0:
+                x2 = min(x + w, img.shape[1])
+                y2 = min(y + h, img.shape[0])
+                conf_map[max(0, y):y2, max(0, x):x2] = float(conf) / 100.0
+    except Exception:
+        pass
+    return conf_map
+
+
 # --- Dataset generation ---
 
 def generate_dataset(
@@ -165,8 +183,11 @@ def generate_dataset(
                 pair_dir = os.path.join(output_dir, "pairs", f"{pair_idx:05d}")
                 os.makedirs(pair_dir, exist_ok=True)
 
+                conf_map = generate_confidence_map(degraded_patch)
+
                 cv2.imwrite(os.path.join(pair_dir, "degraded.png"), degraded_patch)
                 cv2.imwrite(os.path.join(pair_dir, "clean.png"), clean_patch)
+                np.save(os.path.join(pair_dir, "conf.npy"), conf_map)
                 with open(os.path.join(pair_dir, "ocr.txt"), "w", encoding="utf-8") as f:
                     f.write(ocr_text)
 

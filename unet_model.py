@@ -74,8 +74,9 @@ class ConditionalUNet(nn.Module):
         self.embedding = nn.Embedding(VOCAB_SIZE, EMBED_DIM, padding_idx=0)
         self.embed_pool = nn.Linear(EMBED_DIM, BOTTLENECK_CH)
 
-        # Encoder: channels [1, 32, 64, 128, 256]
-        self.enc1 = EncoderBlock(1, 32)
+        # Encoder: channels [2, 32, 64, 128, 256]
+        # Input is 2-channel: (grayscale image, OCR confidence map)
+        self.enc1 = EncoderBlock(2, 32)
         self.enc2 = EncoderBlock(32, 64)
         self.enc3 = EncoderBlock(64, 128)
         self.enc4 = EncoderBlock(128, 256)
@@ -93,8 +94,11 @@ class ConditionalUNet(nn.Module):
 
         # Decoder
         self.dec4 = DecoderBlock(256, 256, 128)
+        self.film_dec4 = FiLMBlock(128, BOTTLENECK_CH)
         self.dec3 = DecoderBlock(128, 128, 64)
+        self.film_dec3 = FiLMBlock(64, BOTTLENECK_CH)
         self.dec2 = DecoderBlock(64, 64, 32)
+        self.film_dec2 = FiLMBlock(32, BOTTLENECK_CH)
         self.dec1 = DecoderBlock(32, 32, 16)
 
         self.output_conv = nn.Conv2d(16, 1, 1)
@@ -118,10 +122,14 @@ class ConditionalUNet(nn.Module):
         b = self.bottleneck(x4)          # (B, 256, 16, 16)
         b = self.film(b, text_vec)       # FiLM conditioning
 
-        d = self.dec4(b, s4)   # (B, 128, 32, 32)
-        d = self.dec3(d, s3)   # (B, 64, 64, 64)
-        d = self.dec2(d, s2)   # (B, 32, 128, 128)
-        d = self.dec1(d, s1)   # (B, 16, 256, 256)
+        d = self.dec4(b, s4)             # (B, 128, 32, 32)
+        d = self.film_dec4(d, text_vec)  # FiLM at 32×32
+        d = self.dec3(d, s3)             # (B, 64, 64, 64)
+        d = self.film_dec3(d, text_vec)  # FiLM at 64×64
+        d = self.dec2(d, s2)             # (B, 32, 128, 128)
+        d = self.film_dec2(d, text_vec)  # FiLM at 128×128
+        d = self.dec1(d, s1)             # (B, 16, 256, 256)
 
         residual = self.output_act(self.output_conv(d))  # (B, 1, 256, 256) in [-1, 1]
-        return torch.clamp(x + 0.5 * residual, 0.0, 1.0)
+        # Add residual only to the image channel (ch 0); conf map (ch 1) is input-only
+        return torch.clamp(x[:, :1] + 0.5 * residual, 0.0, 1.0)

@@ -49,11 +49,24 @@ class OCRDataset(Dataset):
             with open(ocr_path, encoding="utf-8") as f:
                 ocr_text = f.read()
 
+        conf_path = os.path.join(d, "conf.npy")
+        if os.path.exists(conf_path):
+            conf = np.load(conf_path).astype(np.float32)
+            if conf.shape != (IMAGE_SIZE, IMAGE_SIZE):
+                conf = np.array(
+                    Image.fromarray(conf).resize((IMAGE_SIZE, IMAGE_SIZE), Image.BILINEAR)
+                )
+        else:
+            conf = np.zeros((IMAGE_SIZE, IMAGE_SIZE), dtype=np.float32)
+
         degraded_t = torch.from_numpy(degraded.astype(np.float32) / 255.0).unsqueeze(0)
+        conf_t = torch.from_numpy(conf).unsqueeze(0)
+        input_t = torch.cat([degraded_t, conf_t], dim=0)  # (2, H, W)
+
         clean_t = torch.from_numpy(clean.astype(np.float32) / 255.0).unsqueeze(0)
 
         tokens = self.tokenizer.encode(ocr_text)
-        return degraded_t, tokens, clean_t
+        return input_t, tokens, clean_t
 
 
 class MultiScaleL1Loss(nn.Module):
@@ -129,12 +142,12 @@ def run_epoch(model, loader, optimizer, loss_fn, device, train: bool) -> float:
     model.train(train)
     total = 0.0
     with torch.set_grad_enabled(train):
-        for degraded, tokens, clean in loader:
-            degraded = degraded.to(device)
+        for input_t, tokens, clean in loader:
+            input_t = input_t.to(device)
             tokens = tokens.to(device)
             clean = clean.to(device)
 
-            pred = model(degraded, tokens)
+            pred = model(input_t, tokens)
             loss = loss_fn(pred, clean)
 
             if train:
