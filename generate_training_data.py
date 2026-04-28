@@ -113,6 +113,7 @@ def generate_dataset(
     clean_images_dir: str,
     output_dir: str = "dataset",
     target_pairs: int = 5000,
+    max_images: int = None,
 ) -> None:
     src_files = sorted(
         f for f in os.listdir(clean_images_dir)
@@ -120,6 +121,8 @@ def generate_dataset(
     )
     if not src_files:
         raise ValueError(f"No images found in {clean_images_dir}")
+    if max_images:
+        src_files = src_files[:max_images]
 
     # Split source images 80/20 by identity to avoid correlated train/val sets
     random.shuffle(src_files)
@@ -209,6 +212,7 @@ if __name__ == "__main__":
     parser.add_argument("--input", required=True, help="Folder of clean printed-text images")
     parser.add_argument("--output", default="dataset", help="Output dataset folder (default: dataset)")
     parser.add_argument("--count", type=int, default=5000, help="Target number of pairs (default: 5000)")
+    parser.add_argument("--max-images", type=int, default=None, help="Only use first N images (train split)")
     args = parser.parse_args()
 
-    generate_dataset(args.input, args.output, args.count)
+    generate_dataset(args.input, args.output, args.count, args.max_images)

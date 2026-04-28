@@ -82,7 +82,7 @@ Val loss actually went up slightly (0.1217 → 0.1326) and average improvement w
 
 Next up: instead of needing (degraded image, clean image) pairs, try using OCR ground-truth datasets where we have (real image, correct text). This lets us train with a text-recognition loss directly, which is what we actually care about.
 
-### Round 5 (current) — real phone photos + TrOCR loss
+### Round 5 — real phone photos + TrOCR loss (Tesseract pseudo-GT)
 Switched the entire training approach. Instead of paired (degraded, clean) images, we used the SmartDoc ICDAR 2015 dataset — 3,630 real smartphone-captured document photos with ground truth text. No synthetic degradation at all.
 
 The training loss is now differentiable OCR quality: we pass the U-Net's enhanced output through a frozen TrOCR model (microsoft/trocr-base-printed) on CPU, and minimize the cross-entropy between what TrOCR reads from the enhanced image vs. what Tesseract reads from the original. Gradients flow back through the TrOCR encoder to the U-Net. An identity regularization term (L1 weighted by the OCR confidence map) prevents the model from distorting regions where text was already readable.
@@ -97,6 +97,29 @@ Average miss rate: 12.8% → 8.2% (-4.6%). The two problem images both improved:
 - TestImage_4: 30.6% → 0.0% miss rate (-30.6%)
 
 Everything else correctly skipped by the quality gate (only enhances when ≥10 words detected AND miss rate >25%). Best result so far on TestImage_1. The real-domain training data made a noticeable difference — the model is no longer generating noise on blurry inputs the way it was in earlier rounds.
+
+But the word count drop on TestImage_4 (30 words → 0 words) revealed a new problem: the model was generating patterns that drove miss rate to 0% by destroying all readable text. The metric looked good; the output was garbage. A word-count-aware NOISE flag was added to the evaluator to catch this.
+
+### Round 6 — TrOCR with aligned GT
+The core problem with Round 5 was that Tesseract's garbled reading of degraded patches was used as the TrOCR supervision target. The model learned to generate patterns that make TrOCR output the same garbage — not to actually enhance the image.
+
+Fix: align the SmartDoc document-level ground truth to each patch at preprocessing time (sliding window word-overlap search), save as `aligned_gt.txt`, and use that as the TrOCR target instead. Tesseract's reading continues to be used only as the FiLM conditioning signal (a guide, not a target).
+
+Results were poor. Val loss barely moved (11.66 → 11.02 over 10 epochs). Both problem images were still flagged NOISE — the model continued generating grid patterns on heavily degraded inputs. The gradient signal from TrOCR was too weak: for patches that are too degraded to read, TrOCR can't process them at all, so gradients don't flow back meaningfully.
+
+### Round 7 — SmartDoc paired L1 (synthetic degradation)
+Switched away from the TrOCR loss entirely for this round. Instead: take real SmartDoc phone photos, apply synthetic degradation (the same pipeline as earlier rounds: gaussian blur, motion blur, JPEG compression, noise), and train with a direct pixel-level loss (MultiScaleL1 + 0.2 × GradientLoss) to recover the original photo.
+
+This gives a clean, strong gradient signal on every sample regardless of whether the image is readable. The model is back to learning: "given a degraded version of a real phone document photo, recover the original."
+
+1,000 SmartDoc images × 4 patches × 4 degradation variants = 16,000 training pairs. Trained for 60 epochs. Val loss: 0.2299 → 0.1176 (plateau ~0.117 from epoch 30 onward).
+
+### Round 7 results
+Average effective miss rate delta: -2.4%. The two problem images:
+- TestImage_1 (heavily blurred): 85.7% → 39.3% miss rate (-46.4%), word count preserved — no collapse
+- TestImage_4: 30.6% → 38.5% (+7.9%), but word count preserved (no NOISE flag) and enhanced output is visually readable
+
+Everything else correctly skipped by the quality gate. Most importantly: the enhanced outputs are actual readable text, not grid patterns. The noise generation problem is gone. SmartDoc held-out WER evaluation showed +2.2% average delta, but most held-out images were skipped by the quality gate (they're clear enough already) — the relevant benchmark is the UsedImages test set above.
 
 ---
 

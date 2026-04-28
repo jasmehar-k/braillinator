@@ -84,14 +84,21 @@ class SmartDocDataset(Dataset):
 
         patch = np.array(Image.open(os.path.join(d, "patch.png")).convert("L"))
 
+        # Conditioning signal: Tesseract's reading (guides the FiLM layers)
         ocr_text = ""
-        for fname in ("ocr.txt", "gt.txt"):
-            p = os.path.join(d, fname)
-            if os.path.exists(p):
-                with open(p, encoding="utf-8", errors="ignore") as f:
-                    ocr_text = f.read().strip()
-                if ocr_text:
-                    break
+        ocr_path = os.path.join(d, "ocr.txt")
+        if os.path.exists(ocr_path):
+            with open(ocr_path, encoding="utf-8", errors="ignore") as f:
+                ocr_text = f.read().strip()
+
+        # TrOCR supervision target: aligned document ground truth for this patch
+        aligned_gt = ""
+        ag_path = os.path.join(d, "aligned_gt.txt")
+        if os.path.exists(ag_path):
+            with open(ag_path, encoding="utf-8", errors="ignore") as f:
+                aligned_gt = f.read().strip()
+        if not aligned_gt:
+            aligned_gt = ocr_text  # fallback if alignment failed
 
         conf_path = os.path.join(d, "conf.npy")
         conf = np.load(conf_path).astype(np.float32) if os.path.exists(conf_path) else \
@@ -101,9 +108,9 @@ class SmartDocDataset(Dataset):
         conf_t = torch.from_numpy(conf).unsqueeze(0)
         input_t = torch.cat([img_t, conf_t], dim=0)   # (2, 256, 256)
 
-        tokens = self.tokenizer.encode(ocr_text)
+        tokens = self.tokenizer.encode(ocr_text)  # conditioning
 
-        return input_t, tokens, ocr_text   # ocr_text = TrOCR pseudo-GT target
+        return input_t, tokens, aligned_gt   # aligned_gt = TrOCR supervision target
 
 
 def collate_fn(batch):
