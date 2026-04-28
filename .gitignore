@@ -85,3 +85,8 @@ kaggle*/
 mixed_images/
 run_dataset/pairs
 synthetic_images/
+dataset_smartdoc/
+dataset_docvqa/
+smartdoc_download/
+docvqa_download/
+checkpoints/

@@ -82,6 +82,22 @@ Val loss actually went up slightly (0.1217 → 0.1326) and average improvement w
 
 Next up: instead of needing (degraded image, clean image) pairs, try using OCR ground-truth datasets where we have (real image, correct text). This lets us train with a text-recognition loss directly, which is what we actually care about.
 
+### Round 5 (current) — real phone photos + TrOCR loss
+Switched the entire training approach. Instead of paired (degraded, clean) images, we used the SmartDoc ICDAR 2015 dataset — 3,630 real smartphone-captured document photos with ground truth text. No synthetic degradation at all.
+
+The training loss is now differentiable OCR quality: we pass the U-Net's enhanced output through a frozen TrOCR model (microsoft/trocr-base-printed) on CPU, and minimize the cross-entropy between what TrOCR reads from the enhanced image vs. what Tesseract reads from the original. Gradients flow back through the TrOCR encoder to the U-Net. An identity regularization term (L1 weighted by the OCR confidence map) prevents the model from distorting regions where text was already readable.
+
+Preprocessing extracted 14,520 patches from the 3,630 photos, ran Tesseract once per patch to cache OCR text and confidence maps, then trained for 10 epochs.
+
+Val loss (TrOCR cross-entropy) dropped from 11.24 → 6.24 over 10 epochs, with the sharpest drop in epochs 3-4. The loss plateaued around 6.2 as expected — the floor is set by how well TrOCR can read real phone photos at all.
+
+### Round 5 results
+Average miss rate: 12.8% → 8.2% (-4.6%). The two problem images both improved:
+- TestImage_1 (heavily blurred): 85.7% → 42.1% miss rate (-43.6%)
+- TestImage_4: 30.6% → 0.0% miss rate (-30.6%)
+
+Everything else correctly skipped by the quality gate (only enhances when ≥10 words detected AND miss rate >25%). Best result so far on TestImage_1. The real-domain training data made a noticeable difference — the model is no longer generating noise on blurry inputs the way it was in earlier rounds.
+
 ---
 
 ## Acknowledgements
